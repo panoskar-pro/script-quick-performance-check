@@ -1,0 +1,313 @@
+// Script created mostly by Chat GPT and partially by Panos Kargidis
+
+function main() {
+  var period1 = 'LAST_7_DAYS';  
+  var period2 = 'LAST_14_DAYS';
+  var yesterday = 'YESTERDAY'; // For retrieving yesterday's performance
+
+
+  var clicks = 'metrics.clicks';
+  var cost = 'metrics.cost_micros'; // Note: cost is usually in micros
+  var conv = 'metrics.conversions';
+  var conversionValue = 'metrics.conversions_value'; // For Conversion Value in micros
+  var campaignName = 'campaign.name';
+
+  // List of selected metrics
+  var p = [campaignName, clicks, cost, conversionValue, conv]; 
+  
+  // Query for the last 7 days
+  var awl1 = 'SELECT ' + p.join(',') + ' FROM campaign WHERE segments.date DURING ' + period1;
+  Logger.log('Query for last 7 days: ' + awl1);
+  
+  // Query for the last 14 days
+  var awl2 = 'SELECT ' + p.join(',') + ' FROM campaign WHERE segments.date DURING ' + period2;
+  Logger.log('Query for last 14 days: ' + awl2);
+
+  // Query for yesterday's performance
+  var awlYesterday = 'SELECT ' + p.join(',') + ' FROM campaign WHERE segments.date DURING ' + yesterday;
+  Logger.log('Query for yesterday: ' + awlYesterday);
+
+  // Function to process and store report results
+  function getReportData(report) {
+    var data = {};
+    while (report.hasNext()) {
+      var row = report.next();
+      var clicksValue = row[clicks];
+      var convValue = row[conv];
+      var costValue = row[cost] / 1e6; // Convert micros to standard currency
+      var conversionValueValue = row[conversionValue]; // Convert micros to standard currency
+
+      // Only include campaigns with cost > 0
+      if (costValue > 0) {
+        var cvrValue = clicksValue > 0 ? (convValue / clicksValue) * 100 : 0; // Convert CVR to percentage
+        var cpcValue = clicksValue > 0 ? costValue / clicksValue : 0; // Calculate CPC
+        var aovValue = convValue > 0 ? conversionValueValue / convValue : 0; // Calculate AOV
+        var cpaValue = convValue > 0 ? costValue / convValue : 0; // Calculate CPA
+        var valuePerClick = (cvrValue / 100) * aovValue; // Calculate Value per Click
+
+        data[row[campaignName]] = {
+          clicks: clicksValue,
+          conversions: convValue,
+          cost: costValue,
+          conversionValue: conversionValueValue,
+          cvr: cvrValue,
+          cpc: cpcValue,
+          aov: aovValue,
+          cpa: cpaValue,
+          valuePerClick: valuePerClick
+        };
+      }
+    }
+    return data;
+  }
+
+  // Retrieve and store data for the last 7 days
+  var report1 = AdsApp.report(awl1).rows();
+  var data7Days = getReportData(report1);
+  
+  // Retrieve and store data for the last 14 days
+  var report2 = AdsApp.report(awl2).rows();
+  var data14Days = getReportData(report2);
+  
+  // Retrieve and store data for yesterday
+  var reportYesterday = AdsApp.report(awlYesterday).rows();
+  var dataYesterday = getReportData(reportYesterday);
+
+  // Calculate total values for a dataset
+  function calculateTotals(data) {
+    var totals = {
+      clicks: 0,
+      conversions: 0,
+      cost: 0,
+      conversionValue: 0
+    };
+    for (var campaign in data) {
+      totals.clicks += Number(data[campaign].clicks);
+      totals.conversions += data[campaign].conversions;
+      totals.cost += data[campaign].cost;
+      totals.conversionValue += data[campaign].conversionValue;
+    }
+    totals.cvr = totals.clicks > 0 ? (totals.conversions / totals.clicks) * 100 : 0;
+    totals.cpc = totals.clicks > 0 ? totals.cost / totals.clicks : 0;
+    totals.aov = totals.conversions > 0 ? totals.conversionValue / totals.conversions : 0;
+    totals.cpa = totals.conversions > 0 ? totals.cost / totals.conversions : 0;
+    totals.valuePerClick = (totals.cvr / 100) * totals.aov;
+    return totals;
+  }
+
+  // Convert dataYesterday object to an array and sort by spend (cost) in descending order
+  var sortedDataYesterday = Object.keys(dataYesterday)
+    .map(function(campaignName) {
+      return {
+        name: campaignName,
+        ...dataYesterday[campaignName]
+      };
+    })
+    .sort(function(a, b) {
+      return b.cost - a.cost;
+    });
+
+  // Calculate totals for each period
+  var totals7Days = calculateTotals(data7Days);
+  var totals14Days = calculateTotals(data14Days);
+  var totalsYesterday = calculateTotals(dataYesterday);
+
+  // Debugging - Print yesterday's data
+  Logger.log("Yesterday's Data (Sorted by Spend):");
+  sortedDataYesterday.forEach(function(item) {
+    Logger.log("Campaign Name: " + item.name + ", Cost: " + item.cost);
+  });
+
+  // Function to compare data
+  function compareData(data7, data14) {
+    var results = [];
+    for (var campaignName in data7) {
+      if (data14[campaignName]) {
+        var data7Item = data7[campaignName];
+        var data14Item = data14[campaignName];
+        
+        var cvr7 = data7Item.cvr.toFixed(2) + '%';
+        var cvr14 = data14Item.cvr.toFixed(2) + '%';
+        var cpc7 = data7Item.cpc.toFixed(2);
+        var cpc14 = data14Item.cpc.toFixed(2);
+        var aov7 = data7Item.aov.toFixed(2);
+        var aov14 = data14Item.aov.toFixed(2);
+        var cpa7 = data7Item.cpa.toFixed(2);
+        var cpa14 = data14Item.cpa.toFixed(2);
+        var valuePerClick7 = data7Item.valuePerClick.toFixed(2);
+        var valuePerClick14 = data14Item.valuePerClick.toFixed(2);
+        
+        var cvrDiff = data14Item.cvr > 0 ? ((data7Item.cvr - data14Item.cvr) / data14Item.cvr) * 100 : 0; // Calculate CVR difference
+        var cpcDiff = data14Item.cpc > 0 ? ((data7Item.cpc - data14Item.cpc) / data14Item.cpc) * 100 : 0; // Calculate CPC difference
+        var aovDiff = data14Item.aov > 0 ? ((data7Item.aov - data14Item.aov) / data14Item.aov) * 100 : 0; // Calculate AOV difference
+        var cpaDiff = data14Item.cpa > 0 ? ((data7Item.cpa - data14Item.cpa) / data14Item.cpa) * 100 : 0; // Calculate CPA difference
+        var vpcDiff = data14Item.valuePerClick > 0 ? ((data7Item.valuePerClick - data14Item.valuePerClick) / data14Item.valuePerClick) * 100 : 0; // Calculate Value per Click difference
+        
+        results.push({
+          campaignName: campaignName,
+          cvr7Days: cvr7,
+          cvr14Days: cvr14,
+          cvrDiff: cvrDiff.toFixed(2) + '%',
+          cpc7Days: cpc7,
+          cpc14Days: cpc14,
+          cpcDiff: cpcDiff.toFixed(2) + '%',
+          aov7Days: aov7,
+          aov14Days: aov14,
+          aovDiff: aovDiff.toFixed(2) + '%',
+          cpa7Days: cpa7,
+          cpa14Days: cpa14,
+          cpaDiff: cpaDiff.toFixed(2) + '%',
+          valuePerClick7Days: valuePerClick7,
+          valuePerClick14Days: valuePerClick14,
+          valuePerClickDiff: vpcDiff.toFixed(2) + '%'
+        });
+      }
+    }
+
+    // Sort results based on CPC from the last 14 days in descending order
+    results.sort(function(a, b) {
+      return b.cpc14Days - a.cpc14Days;
+    });
+    
+    return results;
+  }
+
+  // Compare data
+  var comparisonResults = compareData(data7Days, data14Days);
+
+  // Calculate total differences
+  var totalDiffs = {
+    cvr: totals14Days.cvr > 0 ? ((totals7Days.cvr - totals14Days.cvr) / totals14Days.cvr) * 100 : 0,
+    cpc: totals14Days.cpc > 0 ? ((totals7Days.cpc - totals14Days.cpc) / totals14Days.cpc) * 100 : 0,
+    aov: totals14Days.aov > 0 ? ((totals7Days.aov - totals14Days.aov) / totals14Days.aov) * 100 : 0,
+    cpa: totals14Days.cpa > 0 ? ((totals7Days.cpa - totals14Days.cpa) / totals14Days.cpa) * 100 : 0,
+    valuePerClick: totals14Days.valuePerClick > 0 ? ((totals7Days.valuePerClick - totals14Days.valuePerClick) / totals14Days.valuePerClick) * 100 : 0
+  };
+
+  // Create the email body
+  var emailBody = "<h1>Campaign Performance Report</h1>";
+  emailBody += "<h2>Performance Overview for Yesterday</h2>";
+  emailBody += "<table border='1' cellpadding='5' cellspacing='0' style='width: 100%; text-align: center;'>";
+  emailBody += "<thead>";
+  emailBody += "<tr>";
+  emailBody += "<th>Campaign Name</th>";
+  emailBody += "<th>Clicks</th>";
+  emailBody += "<th>Conversions</th>";
+  emailBody += "<th>Cost</th>";
+  emailBody += "<th>Conversion Value</th>";
+  emailBody += "<th>CVR</th>";
+  emailBody += "<th>CPC</th>";
+  emailBody += "<th>AOV</th>";
+  emailBody += "<th>CPA</th>";
+  emailBody += "<th>Value per Click</th>";
+  emailBody += "</tr>";
+  emailBody += "</thead>";
+  emailBody += "<tbody>";
+
+  sortedDataYesterday.forEach(function(item) {
+    emailBody += "<tr>";
+    emailBody += "<td>" + item.name + "</td>";
+    emailBody += "<td>" + item.clicks + "</td>";
+    emailBody += "<td>" + item.conversions + "</td>";
+    emailBody += "<td>€" + item.cost.toFixed(2) + "</td>";
+    emailBody += "<td>€" + item.conversionValue.toFixed(2) + "</td>";
+    emailBody += "<td>" + item.cvr.toFixed(2) + "%</td>";
+    emailBody += "<td>€" + item.cpc.toFixed(2) + "</td>";
+    emailBody += "<td>€" + item.aov.toFixed(2) + "</td>";
+    emailBody += "<td>€" + item.cpa.toFixed(2) + "</td>";
+    emailBody += "<td>€" + item.valuePerClick.toFixed(2) + "</td>";
+    emailBody += "</tr>";
+  });
+
+  // Add totals row
+  emailBody += "<tr style='font-weight: bold;'>";
+  emailBody += "<td>Total</td>";
+  emailBody += "<td>" + totalsYesterday.clicks + "</td>";
+  emailBody += "<td>" + totalsYesterday.conversions + "</td>";
+  emailBody += "<td>€" + totalsYesterday.cost.toFixed(2) + "</td>";
+  emailBody += "<td>€" + totalsYesterday.conversionValue.toFixed(2) + "</td>";
+  emailBody += "<td>" + totalsYesterday.cvr.toFixed(2) + "%</td>";
+  emailBody += "<td>€" + totalsYesterday.cpc.toFixed(2) + "</td>";
+  emailBody += "<td>€" + totalsYesterday.aov.toFixed(2) + "</td>";
+  emailBody += "<td>€" + totalsYesterday.cpa.toFixed(2) + "</td>";
+  emailBody += "<td>€" + totalsYesterday.valuePerClick.toFixed(2) + "</td>";
+  emailBody += "</tr>";
+
+  emailBody += "</tbody>";
+  emailBody += "</table>";
+
+  emailBody += "<h2>Campaign Performance Comparison (Last 7 Days vs. Last 14 Days)</h2>";
+  emailBody += "<table border='1' cellpadding='5' cellspacing='0' style='width: 100%; text-align: center;'>";
+  emailBody += "<thead>";
+  emailBody += "<tr>";
+  emailBody += "<th>Campaign Name</th>";
+  emailBody += "<th>CVR (7 Days)</th>";
+  emailBody += "<th>CVR (14 Days)</th>";
+  emailBody += "<th>CVR Change</th>";
+  emailBody += "<th>CPC (7 Days)</th>";
+  emailBody += "<th>CPC (14 Days)</th>";
+  emailBody += "<th>CPC Change</th>";
+  emailBody += "<th>AOV (7 Days)</th>";
+  emailBody += "<th>AOV (14 Days)</th>";
+  emailBody += "<th>AOV Change</th>";
+  emailBody += "<th>CPA (7 Days)</th>";
+  emailBody += "<th>CPA (14 Days)</th>";
+  emailBody += "<th>CPA Change</th>";
+  emailBody += "<th>Value per Click (7 Days)</th>";
+  emailBody += "<th>Value per Click (14 Days)</th>";
+  emailBody += "<th>Value per Click Change</th>";
+  emailBody += "</tr>";
+  emailBody += "</thead>";
+  emailBody += "<tbody>";
+
+  comparisonResults.forEach(function(result) {
+    emailBody += "<tr>";
+    emailBody += "<td>" + result.campaignName + "</td>";
+    emailBody += "<td>" + result.cvr7Days + "</td>";
+    emailBody += "<td>" + result.cvr14Days + "</td>";
+    emailBody += "<td>" + result.cvrDiff + "</td>";
+    emailBody += "<td>€" + result.cpc7Days + "</td>";
+    emailBody += "<td>€" + result.cpc14Days + "</td>";
+    emailBody += "<td>" + result.cpcDiff + "</td>";
+    emailBody += "<td>€" + result.aov7Days + "</td>";
+    emailBody += "<td>€" + result.aov14Days + "</td>";
+    emailBody += "<td>" + result.aovDiff + "</td>";
+    emailBody += "<td>€" + result.cpa7Days + "</td>";
+    emailBody += "<td>€" + result.cpa14Days + "</td>";
+    emailBody += "<td>" + result.cpaDiff + "</td>";
+    emailBody += "<td>€" + result.valuePerClick7Days + "</td>";
+    emailBody += "<td>€" + result.valuePerClick14Days + "</td>";
+    emailBody += "<td>" + result.valuePerClickDiff + "</td>";
+    emailBody += "</tr>";
+  });
+
+  // Add totals row for comparison
+  emailBody += "<tr style='font-weight: bold;'>";
+  emailBody += "<td>Total</td>";
+  emailBody += "<td>" + totals7Days.cvr.toFixed(2) + "%</td>";
+  emailBody += "<td>" + totals14Days.cvr.toFixed(2) + "%</td>";
+  emailBody += "<td>" + totalDiffs.cvr.toFixed(2) + "%</td>";
+  emailBody += "<td>€" + totals7Days.cpc.toFixed(2) + "</td>";
+  emailBody += "<td>€" + totals14Days.cpc.toFixed(2) + "</td>";
+  emailBody += "<td>" + totalDiffs.cpc.toFixed(2) + "%</td>";
+  emailBody += "<td>€" + totals7Days.aov.toFixed(2) + "</td>";
+  emailBody += "<td>€" + totals14Days.aov.toFixed(2) + "</td>";
+  emailBody += "<td>" + totalDiffs.aov.toFixed(2) + "%</td>";
+  emailBody += "<td>€" + totals7Days.cpa.toFixed(2) + "</td>";
+  emailBody += "<td>€" + totals14Days.cpa.toFixed(2) + "</td>";
+  emailBody += "<td>" + totalDiffs.cpa.toFixed(2) + "%</td>";
+  emailBody += "<td>€" + totals7Days.valuePerClick.toFixed(2) + "</td>";
+  emailBody += "<td>€" + totals14Days.valuePerClick.toFixed(2) + "</td>";
+  emailBody += "<td>" + totalDiffs.valuePerClick.toFixed(2) + "%</td>";
+  emailBody += "</tr>";
+
+  emailBody += "</tbody>";
+  emailBody += "</table>";
+
+  // Send email
+  MailApp.sendEmail({
+    to: "addyouremailhere@xxx.com",
+    subject: "Mythic | Campaign Performance Report",
+    htmlBody: emailBody
+  });
+}
