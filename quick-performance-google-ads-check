@@ -6,11 +6,11 @@ function main() {
   var clicks = 'metrics.clicks';
   var cost = 'metrics.cost_micros'; // Note: cost is usually in micros
   var conv = 'metrics.conversions';
-  //var conversionValue = 'metrics.conversions_value'; // For Conversion Value in micros
+  var conversionValue = 'metrics.conversions_value'; // For Conversion Value in micros
   var campaignName = 'campaign.name';
 
   // List of selected metrics
-  var p = [campaignName, clicks, cost, conv]; 
+  var p = [campaignName, clicks, cost, conversionValue, conv]; 
 
   // Query for the last 7 days
   var awl1 = 'SELECT ' + p.join(',') + ' FROM campaign WHERE segments.date DURING ' + period1;
@@ -32,26 +32,28 @@ function main() {
       var clicksValue = row[clicks];
       var convValue = row[conv];
       var costValue = row[cost] / 1e6; // Convert micros to standard currency
-      //var conversionValueValue = row[conversionValue]; // Convert micros to standard currency
+      var conversionValueValue = row[conversionValue]; // Convert micros to standard currency
 
       // Only include campaigns with cost > 0
       if (costValue > 0) {
         var cvrValue = clicksValue > 0 ? (convValue / clicksValue) * 100 : 0; // Convert CVR to percentage
         var cpcValue = clicksValue > 0 ? costValue / clicksValue : 0; // Calculate CPC
-        //var aovValue = convValue > 0 ? conversionValueValue / convValue : 0; // Calculate AOV
+        var aovValue = convValue > 0 ? conversionValueValue / convValue : 0; // Calculate AOV
         var cpaValue = convValue > 0 ? costValue / convValue : 0; // Calculate CPA
-        //var roasValue = costValue > 0 ? conversionValueValue / costValue : 0; // Calculate ROAS
+        var valuePerClick = (cvrValue / 100) * aovValue; // Calculate Value per Click
+        var roasValue = costValue > 0 ? conversionValueValue / costValue : 0; // Calculate ROAS
 
         data[row[campaignName]] = {
           clicks: clicksValue,
           conversions: convValue,
           cost: costValue,
-          //conversionValue: conversionValueValue,
+          conversionValue: conversionValueValue,
           cvr: cvrValue,
           cpc: cpcValue,
-          //aov: aovValue,
+          aov: aovValue,
           cpa: cpaValue,
-          //roas: roasValue
+          valuePerClick: valuePerClick,
+          roas: roasValue
         };
       }
     }
@@ -76,19 +78,20 @@ function main() {
       clicks: 0,
       conversions: 0,
       cost: 0,
-      //conversionValue: 0
+      conversionValue: 0
     };
     for (var campaign in data) {
       totals.clicks += Number(data[campaign].clicks);
       totals.conversions += data[campaign].conversions;
       totals.cost += data[campaign].cost;
-      //totals.conversionValue += data[campaign].conversionValue;
+      totals.conversionValue += data[campaign].conversionValue;
     }
     totals.cvr = totals.clicks > 0 ? (totals.conversions / totals.clicks) * 100 : 0;
     totals.cpc = totals.clicks > 0 ? totals.cost / totals.clicks : 0;
-    //totals.aov = totals.conversions > 0 ? totals.conversionValue / totals.conversions : 0;
+    totals.aov = totals.conversions > 0 ? totals.conversionValue / totals.conversions : 0;
     totals.cpa = totals.conversions > 0 ? totals.cost / totals.conversions : 0;
-    //totals.roas = totals.cost > 0 ? totals.conversionValue / totals.cost : 0;
+    totals.valuePerClick = (totals.cvr / 100) * totals.aov;
+    totals.roas = totals.cost > 0 ? totals.conversionValue / totals.cost : 0;
     return totals;
   }
 
@@ -127,18 +130,21 @@ function main() {
         var cvr14 = data14Item.cvr.toFixed(2) + '%';
         var cpc7 = data7Item.cpc.toFixed(2);
         var cpc14 = data14Item.cpc.toFixed(2);
-        //var aov7 = data7Item.aov.toFixed(2);
-        //var aov14 = data14Item.aov.toFixed(2);
+        var aov7 = data7Item.aov.toFixed(2);
+        var aov14 = data14Item.aov.toFixed(2);
         var cpa7 = data7Item.cpa.toFixed(2);
         var cpa14 = data14Item.cpa.toFixed(2);
-        //var roas7 = data7Item.roas.toFixed(2);
-        //var roas14 = data14Item.roas.toFixed(2);
+        var valuePerClick7 = data7Item.valuePerClick.toFixed(2);
+        var valuePerClick14 = data14Item.valuePerClick.toFixed(2);
+        var roas7 = data7Item.roas.toFixed(2);
+        var roas14 = data14Item.roas.toFixed(2);
         
         var cvrDiff = data14Item.cvr > 0 ? ((data7Item.cvr - data14Item.cvr) / data14Item.cvr) * 100 : 0; // Calculate CVR difference
         var cpcDiff = data14Item.cpc > 0 ? ((data7Item.cpc - data14Item.cpc) / data14Item.cpc) * 100 : 0; // Calculate CPC difference
-        //var aovDiff = data14Item.aov > 0 ? ((data7Item.aov - data14Item.aov) / data14Item.aov) * 100 : 0; // Calculate AOV difference
+        var aovDiff = data14Item.aov > 0 ? ((data7Item.aov - data14Item.aov) / data14Item.aov) * 100 : 0; // Calculate AOV difference
         var cpaDiff = data14Item.cpa > 0 ? ((data7Item.cpa - data14Item.cpa) / data14Item.cpa) * 100 : 0; // Calculate CPA difference
-        //var roasDiff = data14Item.roas > 0 ? ((data7Item.roas - data14Item.roas) / data14Item.roas) * 100 : 0; // Calculate ROAS difference
+        var vpcDiff = data14Item.valuePerClick > 0 ? ((data7Item.valuePerClick - data14Item.valuePerClick) / data14Item.valuePerClick) * 100 : 0; // Calculate Value per Click difference
+        var roasDiff = data14Item.roas > 0 ? ((data7Item.roas - data14Item.roas) / data14Item.roas) * 100 : 0; // Calculate ROAS difference
         
         results.push({
           campaignName: campaignName,
@@ -148,15 +154,18 @@ function main() {
           cpc7Days: cpc7,
           cpc14Days: cpc14,
           cpcDiff: cpcDiff.toFixed(2) + '%',
-          //aov7Days: aov7,
-          //aov14Days: aov14,
-          //aovDiff: aovDiff.toFixed(2) + '%',
+          aov7Days: aov7,
+          aov14Days: aov14,
+          aovDiff: aovDiff.toFixed(2) + '%',
           cpa7Days: cpa7,
           cpa14Days: cpa14,
           cpaDiff: cpaDiff.toFixed(2) + '%',
-          //roas7Days: roas7,
-          //roas14Days: roas14,
-          //roasDiff: roasDiff.toFixed(2) + '%'
+          valuePerClick7Days: valuePerClick7,
+          valuePerClick14Days: valuePerClick14,
+          valuePerClickDiff: vpcDiff.toFixed(2) + '%',
+          roas7Days: roas7,
+          roas14Days: roas14,
+          roasDiff: roasDiff.toFixed(2) + '%'
         });
       }
     }
@@ -165,145 +174,136 @@ function main() {
 
   var comparisonResults = compareData(data7Days, data14Days);
 
-  // Construct email body with detailed tables
-  var emailBody = "<h1>Campaign Performance Report</h1>";
-  emailBody += "<h2>Performance Overview for Yesterday</h2>";
-  emailBody += "<table border='1' cellpadding='5' cellspacing='0' style='width: 100%; text-align: center;'>";
-  emailBody += "<thead>";
-  emailBody += "<tr>";
-  emailBody += "<th>Campaign Name</th>";
-  emailBody += "<th>Clicks</th>";
-  emailBody += "<th>Conversions</th>";
-  emailBody += "<th>Cost</th>";
-  //emailBody += "<th>Conversion Value</th>";
-  emailBody += "<th>CVR</th>";
-  emailBody += "<th>CPC</th>";
-  //emailBody += "<th>AOV</th>";
-  emailBody += "<th>CPA</th>";
-  //emailBody += "<th>ROAS</th>";
-  emailBody += "</tr>";
-  emailBody += "</thead>";
-  emailBody += "<tbody>";
+  // Construct email body with detailed tables using template literals
+  var emailBody = `
+  <h1>Campaign Performance Report</h1>
 
-  sortedDataYesterday.forEach(function(item) {
-    emailBody += "<tr>";
-    emailBody += "<td>" + item.name + "</td>";
-    emailBody += "<td>" + item.clicks + "</td>";
-    emailBody += "<td>" + item.conversions.toFixed(0) + "</td>";
-    emailBody += "<td>€" + item.cost.toFixed(2) + "</td>";
-    //emailBody += "<td>€" + item.conversionValue.toFixed(0) + "</td>";
-    emailBody += "<td>" + item.cvr.toFixed(2) + "%</td>";
-    emailBody += "<td>€" + item.cpc.toFixed(2) + "</td>";
-    //emailBody += "<td>€" + item.aov.toFixed(2) + "</td>";
-    emailBody += "<td>€" + item.cpa.toFixed(2) + "</td>";
-    //emailBody += "<td>" + item.roas.toFixed(2) + "</td>";
-    emailBody += "</tr>";
-  });
+  <p>Hey you 👋,</p>
 
-  // Add totals row
-  emailBody += "<tr style='font-weight: bold;'>";
-  emailBody += "<td>Total</td>";
-  emailBody += "<td>" + totalsYesterday.clicks + "</td>";
-  emailBody += "<td>" + totalsYesterday.conversions.toFixed(0) + "</td>";
-  emailBody += "<td>€" + totalsYesterday.cost.toFixed(2) + "</td>";
-  //emailBody += "<td>€" + totalsYesterday.conversionValue.toFixed(0) + "</td>";
-  emailBody += "<td>" + totalsYesterday.cvr.toFixed(2) + "%</td>";
-  emailBody += "<td>€" + totalsYesterday.cpc.toFixed(2) + "</td>";
-  //emailBody += "<td>€" + totalsYesterday.aov.toFixed(2) + "</td>";
-  emailBody += "<td>€" + totalsYesterday.cpa.toFixed(2) + "</td>";
-  //emailBody += "<td>" + totalsYesterday.roas.toFixed(2) + "</td>";
-  emailBody += "</tr>";
+  <p>Here’s the news 🗞️ for you. Grab your coffee ☕, relax, and take a quick look at the performance.</p>
 
-  emailBody += "</tbody>";
-  emailBody += "</table>";
+  <p>If the results aren’t what you expected, don’t worry—you’ve got this! 💪</p>
 
-  // Add ROAS to comparison table headers
-  emailBody += "<h2>Campaign Performance Comparison (Last 7 Days vs. Last 14 Days)</h2>";
-  emailBody += "<table border='1' cellpadding='5' cellspacing='0' style='width: 100%; text-align: center;'>";
-  emailBody += "<thead>";
-  emailBody += "<tr>";
-  emailBody += "<th>Campaign Name</th>";
-  emailBody += "<th>CVR (7 Days)</th>";
-  emailBody += "<th>CVR (14 Days)</th>";
-  emailBody += "<th>CVR Change</th>";
-  emailBody += "<th>CPC (7 Days)</th>";
-  emailBody += "<th>CPC (14 Days)</th>";
-  emailBody += "<th>CPC Change</th>";
-  //emailBody += "<th>AOV (7 Days)</th>";
-  //emailBody += "<th>AOV (14 Days)</th>";
-  //emailBody += "<th>AOV Change</th>";
-  emailBody += "<th>CPA (7 Days)</th>";
-  emailBody += "<th>CPA (14 Days)</th>";
-  emailBody += "<th>CPA Change</th>";
-  //emailBody += "<th>ROAS (7 Days)</th>";
-  //emailBody += "<th>ROAS (14 Days)</th>";
-  //emailBody += "<th>ROAS Change</th>";
-  emailBody += "</tr>";
-  emailBody += "</thead>";
-  emailBody += "<tbody>";
+  <h2>Performance Overview for Yesterday</h2>
+  <table border='1' cellpadding='5' cellspacing='0' style='width: 100%; text-align: center;'>
+    <thead>
+      <tr>
+        <th>Campaign Name</th>
+        <th>Clicks</th>
+        <th>Conversions</th>
+        <th>Cost</th>
+        <th>Conversion Value</th>
+        <th>CVR</th>
+        <th>CPC</th>
+        <th>AOV</th>
+        <th>CPA</th>
+        <th>Value per Click</th>
+        <th>ROAS</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${sortedDataYesterday.map(item => `
+      <tr>
+        <td>${item.name}</td>
+        <td>${item.clicks}</td>
+        <td>${item.conversions.toFixed(0)}</td>
+        <td>€${item.cost.toFixed(2)}</td>
+        <td>€${item.conversionValue.toFixed(0)}</td>
+        <td>${item.cvr.toFixed(2)}%</td>
+        <td>€${item.cpc.toFixed(2)}</td>
+        <td>€${item.aov.toFixed(2)}</td>
+        <td>€${item.cpa.toFixed(2)}</td>
+        <td>€${item.valuePerClick.toFixed(2)}</td>
+        <td>${item.roas.toFixed(2)}</td>
+      </tr>`).join('')}
+      <tr style='font-weight: bold;'>
+        <td>Total</td>
+        <td>${totalsYesterday.clicks}</td>
+        <td>${totalsYesterday.conversions.toFixed(0)}</td>
+        <td>€${totalsYesterday.cost.toFixed(2)}</td>
+        <td>€${totalsYesterday.conversionValue.toFixed(0)}</td>
+        <td>${totalsYesterday.cvr.toFixed(2)}%</td>
+        <td>€${totalsYesterday.cpc.toFixed(2)}</td>
+        <td>€${totalsYesterday.aov.toFixed(2)}</td>
+        <td>€${totalsYesterday.cpa.toFixed(2)}</td>
+        <td>€${totalsYesterday.valuePerClick.toFixed(2)}</td>
+        <td>${totalsYesterday.roas.toFixed(2)}</td>
+      </tr>
+    </tbody>
+  </table>
 
-  comparisonResults.forEach(function(result) {
-    emailBody += "<tr>";
-    emailBody += "<td>" + result.campaignName + "</td>";
-    emailBody += "<td>" + result.cvr7Days + "</td>";
-    emailBody += "<td>" + result.cvr14Days + "</td>";
-    emailBody += "<td>" + result.cvrDiff + "</td>";
-    emailBody += "<td>€" + result.cpc7Days + "</td>";
-    emailBody += "<td>€" + result.cpc14Days + "</td>";
-    emailBody += "<td>" + result.cpcDiff + "</td>";
-    //emailBody += "<td>€" + result.aov7Days + "</td>";
-    //emailBody += "<td>€" + result.aov14Days + "</td>";
-    //emailBody += "<td>" + result.aovDiff + "</td>";
-    emailBody += "<td>€" + result.cpa7Days + "</td>";
-    emailBody += "<td>€" + result.cpa14Days + "</td>";
-    emailBody += "<td>" + result.cpaDiff + "</td>";
-    //emailBody += "<td>" + result.roas7Days + "</td>";
-    //emailBody += "<td>" + result.roas14Days + "</td>";
-    //emailBody += "<td>" + result.roasDiff + "</td>";
-    emailBody += "</tr>";
-  });
-
-  // Add totals row to comparison table
-  var totalComparisonResults = {
-    cvr7Days: (totals7Days.cvr).toFixed(2) + '%',
-    cvr14Days: (totals14Days.cvr).toFixed(2) + '%',
-    cvrDiff: ((totals7Days.cvr - totals14Days.cvr) / totals14Days.cvr * 100).toFixed(2) + '%',
-    cpc7Days: totals7Days.cpc.toFixed(2),
-    cpc14Days: totals14Days.cpc.toFixed(2),
-    cpcDiff: ((totals7Days.cpc - totals14Days.cpc) / totals14Days.cpc * 100).toFixed(2) + '%',
-    //aov7Days: totals7Days.aov.toFixed(2),
-    //aov14Days: totals14Days.aov.toFixed(2),
-    //aovDiff: ((totals7Days.aov - totals14Days.aov) / totals14Days.aov * 100).toFixed(2) + '%',
-    cpa7Days: totals7Days.cpa.toFixed(2),
-    cpa14Days: totals14Days.cpa.toFixed(2),
-    cpaDiff: ((totals7Days.cpa - totals14Days.cpa) / totals14Days.cpa * 100).toFixed(2) + '%',
-    //roas7Days: totals7Days.roas.toFixed(2),
-    //roas14Days: totals14Days.roas.toFixed(2),
-    //roasDiff: ((totals7Days.roas - totals14Days.roas) / totals14Days.roas * 100).toFixed(2) + '%'
-  };
-
-  emailBody += "<tr style='font-weight: bold;'>";
-  emailBody += "<td>Total</td>";
-  emailBody += "<td>" + totalComparisonResults.cvr7Days + "</td>";
-  emailBody += "<td>" + totalComparisonResults.cvr14Days + "</td>";
-  emailBody += "<td>" + totalComparisonResults.cvrDiff + "</td>";
-  emailBody += "<td>€" + totalComparisonResults.cpc7Days + "</td>";
-  emailBody += "<td>€" + totalComparisonResults.cpc14Days + "</td>";
-  emailBody += "<td>" + totalComparisonResults.cpcDiff + "</td>";
-  //emailBody += "<td>€" + totalComparisonResults.aov7Days + "</td>";
-  //emailBody += "<td>€" + totalComparisonResults.aov14Days + "</td>";
-  //emailBody += "<td>" + totalComparisonResults.aovDiff + "</td>";
-  emailBody += "<td>€" + totalComparisonResults.cpa7Days + "</td>";
-  emailBody += "<td>€" + totalComparisonResults.cpa14Days + "</td>";
-  emailBody += "<td>" + totalComparisonResults.cpaDiff + "</td>";
-  //emailBody += "<td>" + totalComparisonResults.roas7Days + "</td>";
-  //emailBody += "<td>" + totalComparisonResults.roas14Days + "</td>";
-  //emailBody += "<td>" + totalComparisonResults.roasDiff + "</td>";
-  emailBody += "</tr>";
-
-  emailBody += "</tbody>";
-  emailBody += "</table>";
-
+  <h2>Campaign Performance Comparison (Last 7 Days vs. Last 14 Days)</h2>
+  <table border='1' cellpadding='5' cellspacing='0' style='width: 100%; text-align: center;'>
+    <thead>
+      <tr>
+        <th>Campaign Name</th>
+        <th>CVR (7 Days)</th>
+        <th>CVR (14 Days)</th>
+        <th>CVR Change</th>
+        <th>CPC (7 Days)</th>
+        <th>CPC (14 Days)</th>
+        <th>CPC Change</th>
+        <th>AOV (7 Days)</th>
+        <th>AOV (14 Days)</th>
+        <th>AOV Change</th>
+        <th>CPA (7 Days)</th>
+        <th>CPA (14 Days)</th>
+        <th>CPA Change</th>
+        <th>Value per Click (7 Days)</th>
+        <th>Value per Click (14 Days)</th>
+        <th>Value per Click Change</th>
+        <th>ROAS (7 Days)</th>
+        <th>ROAS (14 Days)</th>
+        <th>ROAS Change</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${comparisonResults.map(result => `
+      <tr>
+        <td>${result.campaignName}</td>
+        <td>${result.cvr7Days}</td>
+        <td>${result.cvr14Days}</td>
+        <td>${result.cvrDiff}</td>
+        <td>€${result.cpc7Days}</td>
+        <td>€${result.cpc14Days}</td>
+        <td>${result.cpcDiff}</td>
+        <td>€${result.aov7Days}</td>
+        <td>€${result.aov14Days}</td>
+        <td>${result.aovDiff}</td>
+        <td>€${result.cpa7Days}</td>
+        <td>€${result.cpa14Days}</td>
+        <td>${result.cpaDiff}</td>
+        <td>€${result.valuePerClick7Days}</td>
+        <td>€${result.valuePerClick14Days}</td>
+        <td>${result.valuePerClickDiff}</td>
+        <td>${result.roas7Days}</td>
+        <td>${result.roas14Days}</td>
+        <td>${result.roasDiff}</td>
+      </tr>`).join('')}
+      <tr style='font-weight: bold;'>
+        <td>Total</td>
+        <td>${(totals7Days.cvr).toFixed(2)}%</td>
+        <td>${(totals14Days.cvr).toFixed(2)}%</td>
+        <td>${((totals7Days.cvr - totals14Days.cvr) / totals14Days.cvr * 100).toFixed(2)}%</td>
+        <td>€${totals7Days.cpc.toFixed(2)}</td>
+        <td>€${totals14Days.cpc.toFixed(2)}</td>
+        <td>${((totals7Days.cpc - totals14Days.cpc) / totals14Days.cpc * 100).toFixed(2)}%</td>
+        <td>€${totals7Days.aov.toFixed(2)}</td>
+        <td>€${totals14Days.aov.toFixed(2)}</td>
+        <td>${((totals7Days.aov - totals14Days.aov) / totals14Days.aov * 100).toFixed(2)}%</td>
+        <td>€${totals7Days.cpa.toFixed(2)}</td>
+        <td>€${totals14Days.cpa.toFixed(2)}</td>
+        <td>${((totals7Days.cpa - totals14Days.cpa) / totals14Days.cpa * 100).toFixed(2)}%</td>
+        <td>€${totals7Days.valuePerClick.toFixed(2)}</td>
+        <td>€${totals14Days.valuePerClick.toFixed(2)}</td>
+        <td>${((totals7Days.valuePerClick - totals14Days.valuePerClick) / totals14Days.valuePerClick * 100).toFixed(2)}%</td>
+        <td>${totals7Days.roas.toFixed(2)}</td>
+        <td>${totals14Days.roas.toFixed(2)}</td>
+        <td>${((totals7Days.roas - totals14Days.roas) / totals14Days.roas * 100).toFixed(2)}%</td>
+      </tr>
+    </tbody>
+  </table>
+  `;
   // Send email (assuming the email address is correct)
   MailApp.sendEmail({
     to: 'xyz@gmail.com', // Replace with actual recipient
