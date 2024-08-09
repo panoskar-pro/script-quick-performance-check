@@ -1,3 +1,5 @@
+// The script was created mostly by ChatGPT, with guidance from Panos Kargidis.
+
 function main() {
   var period1 = 'LAST_7_DAYS';  
   var period2 = 'LAST_14_DAYS';
