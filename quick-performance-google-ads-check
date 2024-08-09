@@ -1,4 +1,4 @@
-// Script created mostly by ChatGPT and partially by Panos Kargidis
+// The Script has been created mostly by ChatGPT and partially by Panos Kargidis
 
 function main() {
   var period1 = 'LAST_7_DAYS';  
