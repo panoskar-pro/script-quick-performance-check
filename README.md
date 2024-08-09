@@ -1,8 +1,8 @@
-# script-quick-performance-check
+Change the email at the bottom of the code, and you’re good to go! :)
 
-- Change the e-mail at the bottom of the code, and you are good to go!
+I hope you find it as useful as I do.
 
 Enjoy!
 
-Best Regards,
+Best regards,
 Panos Kargidis
