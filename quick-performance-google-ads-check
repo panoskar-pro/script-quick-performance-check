@@ -306,7 +306,7 @@ function main() {
 
   // Send email (assuming the email address is correct)
   MailApp.sendEmail({
-    to: 'panagiotis.kargidis@amplifyd.co.uk', // Replace with actual recipient
+    to: 'xyz@gmail.com', // Replace with actual recipient
     subject: 'Campaign Performance Report',
     htmlBody: emailBody
   });
